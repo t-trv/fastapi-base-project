@@ -1,0 +1,19 @@
+stages:
+  - build
+
+build_app:
+  stage: build
+  tags:
+    - be_vision_ai
+  script:
+    - echo "Đang build ứng dụng cho branch $CI_COMMIT_BRANCH"
+    - cp "$ENV_FILE" .env
+    - echo "=== Nội dung file .env ==="
+    - cat .env
+    - echo "=========================="
+    - docker compose down
+    - docker compose up --build -d
+    # - docker compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email email-cua-ban@gmail.com --agree-tos --no-eff-email -d storage.vifence.io --disable-hook-validation
+    # - docker compose -f docker-compose-cert.yml up -d nginx
+    # - docker compose -f docker-compose-cert.yml run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email thanhtrung250994@gmail.com --agree-tos --no-eff-email -d storage.vifence.io --disable-hook-validation
+    # - docker compose -f docker-compose-cert.yml down

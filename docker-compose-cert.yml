@@ -1,0 +1,29 @@
+services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx-cert-launcher
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx-cert.conf:/etc/nginx/nginx.conf
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+    networks:
+      - cert_network
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot-issuer
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+    networks:
+      - cert_network
+
+networks:
+  cert_network:
+    driver: bridge
+
+volumes:
+  certbot-etc:
+  certbot-var:

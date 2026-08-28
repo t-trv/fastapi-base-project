@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: bosky-db
+    environment:
+      POSTGRES_USER: trungtt
+      POSTGRES_PASSWORD: Trung1234!
+      POSTGRES_DB: bosky_db
+    ports:
+      - "5435:5432"
+    restart: always
+    volumes:
+      - /srv/data/bosky_postgres_data:/var/lib/postgresql/data
+    networks:
+      - bosky-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: bosky-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: trungtt@example.com
+      PGADMIN_DEFAULT_PASSWORD: Trung1234!
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+    restart: always
+    networks:
+      - bosky-network
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-01-18T22-51-28Z-cpuv1
+    container_name: bosky-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: always
+    networks:
+      - bosky-network
+
+networks:
+  bosky-network:
+    external: true
+
+volumes:
+  minio_data:
