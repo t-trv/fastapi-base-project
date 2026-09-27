@@ -16,7 +16,7 @@ config = context.config
 # Convert async driver back to sync for Alembic migrations
 db_url = settings.database_url
 if db_url.startswith("postgresql+asyncpg://"):
-    db_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    db_url = db_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
 
 print(f"\n⚙️  Alembic is connecting to DB URL: {db_url}\n")
 config.set_main_option("sqlalchemy.url", db_url)
