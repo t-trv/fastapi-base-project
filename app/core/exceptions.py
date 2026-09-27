@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from starlette.exceptions import HTTPException
 from app.exceptions import AppError
 
@@ -79,6 +79,25 @@ def register_exception_handlers(app: FastAPI):
                     "code": "VALIDATION_ERROR",
                     "message": "Input validation failed",
                     "errors": parsed_errors,
+                }
+            },
+        )
+
+    @app.exception_handler(ResponseValidationError)
+    def response_validation_exception_handler(_: Request, exc: ResponseValidationError):
+        """
+        Xử lý lỗi dữ liệu đầu ra không khớp với response_model (Schema Validation).
+        - Ghi log chi tiết lỗi schema trả về để backend debug.
+        - Trả về mã HTTP 500 kèm mã RESPONSE_VALIDATION_ERROR.
+        """
+        logger = logging.getLogger("uvicorn.error")
+        logger.error(f"Response validation error: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": {
+                    "code": "RESPONSE_VALIDATION_ERROR",
+                    "message": "Internal response format does not match schema",
                 }
             },
         )
