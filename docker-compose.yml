@@ -3,52 +3,53 @@ version: "3.8"
 services:
   db:
     image: postgres:15-alpine
-    container_name: bosky-db
+    container_name: app-db
     environment:
-      POSTGRES_USER: trungtt
-      POSTGRES_PASSWORD: Trung1234!
-      POSTGRES_DB: bosky_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: app_db
     ports:
-      - "5435:5432"
+      - "5432:5432"
     restart: always
     volumes:
-      - /srv/data/bosky_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - bosky-network
+      - app-network
 
   pgadmin:
     image: dpage/pgadmin4
-    container_name: bosky-pgadmin
+    container_name: app-pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: trungtt@example.com
-      PGADMIN_DEFAULT_PASSWORD: Trung1234!
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: adminpassword
     ports:
       - "8080:80"
     depends_on:
       - db
     restart: always
     networks:
-      - bosky-network
+      - app-network
 
   minio:
     image: quay.io/minio/minio:RELEASE.2024-01-18T22-51-28Z-cpuv1
-    container_name: bosky-minio
+    container_name: app-minio
     ports:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: password123
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
     restart: always
     networks:
-      - bosky-network
+      - app-network
 
 networks:
-  bosky-network:
-    external: true
+  app-network:
+    driver: bridge
 
 volumes:
+  postgres_data:
   minio_data:
