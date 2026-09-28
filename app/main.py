@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_v1
 from app.config import settings
+from app.config.redis import init_redis, close_redis
 from app.core import setup_logging, register_exception_handlers
 from app.schedulers.scheduler import setup_scheduler, shutdown_scheduler
 
@@ -12,11 +13,14 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Khởi chạy kết nối Redis
+    await init_redis()
     # Khởi chạy tác vụ scheduler nền
     setup_scheduler()
     yield
-    # Tắt scheduler an toàn khi dừng server
+    # Tắt scheduler và ngắt kết nối Redis an toàn khi dừng server
     shutdown_scheduler()
+    await close_redis()
 
 app = FastAPI(
     title=settings.APP_NAME,

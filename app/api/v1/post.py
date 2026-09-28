@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.database import get_db
+from app.utils.cache import cached, invalidate_cache
 from app.schemas.post import (
     PostCreate,
     BulkPostCreate,
@@ -16,6 +17,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=DataListResponse[PostResponse])
+@cached(expire=60, prefix="posts:list")
 async def list_posts(
     params: PostQueryParams = Depends(),
     db: AsyncSession = Depends(get_db),
@@ -27,10 +29,12 @@ async def list_posts(
         offset=queries.get("offset", 0),
         limit=queries.get("limit", 10),
     )
-    return DataListResponse(items=items, meta=meta)
+    post_responses = [PostResponse.model_validate(item) for item in items]
+    return DataListResponse[PostResponse](items=post_responses, meta=meta)
 
 
 @router.post("/bulk", response_model=list[PostResponse], status_code=201)
+@invalidate_cache(patterns=["posts:list:*"])
 async def create_posts_bulk(
     payload: BulkPostCreate, db: AsyncSession = Depends(get_db)
 ):
@@ -40,6 +44,7 @@ async def create_posts_bulk(
 
 
 @router.delete("/bulk", response_model=list[PostResponse])
+@invalidate_cache(patterns=["posts:list:*", "posts:detail:*"])
 async def delete_posts_bulk(
     payload: BulkPostDelete, db: AsyncSession = Depends(get_db)
 ):
@@ -49,6 +54,7 @@ async def delete_posts_bulk(
 
 
 @router.post("", response_model=PostResponse, status_code=201)
+@invalidate_cache(patterns=["posts:list:*"])
 async def create_post(post_in: PostCreate, db: AsyncSession = Depends(get_db)):
     db_post = await post_service.create_post(db, post_in)
     await db.commit()
@@ -56,11 +62,13 @@ async def create_post(post_in: PostCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{post_id}", response_model=PostResponse)
+@cached(expire=120, prefix="posts:detail")
 async def get_post(post_id: int, db: AsyncSession = Depends(get_db)):
     return await post_service.get_post_by_id(db, post_id)
 
 
 @router.put("/{post_id}", response_model=PostResponse)
+@invalidate_cache(patterns=["posts:list:*", "posts:detail:*"])
 async def update_post(
     post_id: int, post_in: PostUpdate, db: AsyncSession = Depends(get_db)
 ):
@@ -70,6 +78,7 @@ async def update_post(
 
 
 @router.delete("/{post_id}", response_model=PostResponse)
+@invalidate_cache(patterns=["posts:list:*", "posts:detail:*"])
 async def delete_post(post_id: int, db: AsyncSession = Depends(get_db)):
     db_post = await post_service.delete_post(db, post_id)
     await db.commit()

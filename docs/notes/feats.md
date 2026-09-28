@@ -22,9 +22,9 @@
 ---
 
 ## ⚡ 2. Caching & Giới hạn truy cập (Redis & Rate Limit)
-- [ ] **Tích hợp Redis Async (`redis-py`):**
-  - [ ] Cấu hình kết nối Redis Connection Pool qua `.env`
-  - [ ] Helper/Decorator `@cache(expire=60)` cho các query đọc dữ liệu
+- [x] **Tích hợp Redis Async (`redis-py`):**
+  - [x] Cấu hình kết nối Redis Connection Pool qua `.env`
+  - [x] Caching kết quả cho `GET /api/v1/posts` và `GET /api/v1/posts/{id}` (TTL + Invalidation)
   - [ ] Quản lý Blacklist JWT Token khi logout
 - [ ] **Rate Limiting (Chống Spam / Brute-force):**
   - [ ] Giới hạn số request/phút theo IP hoặc User (dùng `slowapi` hoặc Redis Limiter)

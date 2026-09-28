@@ -29,6 +29,18 @@ class Settings:
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "your_telegram_bot_token_here")
     TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "your_telegram_chat_id_here")
 
+    # Redis Configuration
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_PASSWORD: str | None = os.getenv("REDIS_PASSWORD", None)
+    REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
+
+    @property
+    def redis_url(self) -> str:
+        if self.REDIS_PASSWORD:
+            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
     @property
     def database_url(self) -> str:
         # Use postgresql+asyncpg for Asynchronous SQLAlchemy connection
