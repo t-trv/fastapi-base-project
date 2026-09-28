@@ -19,3 +19,5 @@ class UserUpdate(BaseSchema):
 class UserResponse(UserBase):
     id: int
 
+class UserResponseForPost(UserBase):
+    pass

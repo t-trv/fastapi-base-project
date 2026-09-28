@@ -5,6 +5,7 @@ from .base import (
     DataListResponse,
 )
 from .user import UserBase, UserCreate, UserUpdate, UserResponse
+from .post import PostBase, PostCreate, PostUpdate, PostResponse
 
 __all__ = [
     "BaseSchema",
@@ -15,4 +16,8 @@ __all__ = [
     "UserCreate",
     "UserUpdate",
     "UserResponse",
+    "PostBase",
+    "PostCreate",
+    "PostUpdate",
+    "PostResponse",
 ]
