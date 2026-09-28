@@ -18,6 +18,14 @@ class PostCreate(PostBase):
     user_id: int = Field(..., gt=0)
 
 
+class BulkPostCreate(BaseSchema):
+    items: list[PostCreate] = Field(..., min_length=1, max_length=1000)
+
+
+class BulkPostDelete(BaseSchema):
+    ids: list[int] = Field(..., min_length=1, max_length=1000)
+
+
 class PostUpdate(BaseSchema):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     content: Optional[str] = Field(None)
@@ -30,7 +38,7 @@ class PostResponse(PostBase):
     # user_id: int
     created_at: datetime
     updated_at: datetime
-    user: Optional[UserResponseForPost] = None
+    owner: Optional[UserResponseForPost] = Field(None, validation_alias="user")
 
 class PostQueryParams(CommonQueryParams):
     user_id: Optional[int] = Field(None, gt=0)

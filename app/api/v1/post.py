@@ -1,7 +1,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.database import get_db
-from app.schemas.post import PostCreate, PostUpdate, PostResponse, PostQueryParams
+from app.schemas.post import (
+    PostCreate,
+    BulkPostCreate,
+    BulkPostDelete,
+    PostUpdate,
+    PostResponse,
+    PostQueryParams,
+)
 from app.schemas.base import DataListResponse, PaginationMeta
 from app.services import post as post_service
 
@@ -21,6 +28,24 @@ async def list_posts(
         limit=queries.get("limit", 10),
     )
     return DataListResponse(items=items, meta=meta)
+
+
+@router.post("/bulk", response_model=list[PostResponse], status_code=201)
+async def create_posts_bulk(
+    payload: BulkPostCreate, db: AsyncSession = Depends(get_db)
+):
+    db_posts = await post_service.create_posts_bulk(db, payload.items)
+    await db.commit()
+    return db_posts
+
+
+@router.delete("/bulk", response_model=list[PostResponse])
+async def delete_posts_bulk(
+    payload: BulkPostDelete, db: AsyncSession = Depends(get_db)
+):
+    db_posts = await post_service.delete_posts_bulk(db, payload.ids)
+    await db.commit()
+    return db_posts
 
 
 @router.post("", response_model=PostResponse, status_code=201)

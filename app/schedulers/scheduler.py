@@ -12,7 +12,7 @@ def setup_scheduler():
     Đăng ký các tác vụ lập lịch và bắt đầu scheduler.
     """
     # Đăng ký job chạy định kỳ mỗi 10 giây
-    scheduler.add_job(hello_world_job, "interval", seconds=10)
+    # scheduler.add_job(hello_world_job, "interval", seconds=10)
     scheduler.start()
     log_info("scheduler", "Started successfully with all registered jobs.")
 

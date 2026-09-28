@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Generic, TypeVar, Type, Optional, Any
 
-from sqlalchemy import select, func, or_, cast, String
+from sqlalchemy import select, func, or_, cast, String, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Base
@@ -41,12 +41,16 @@ class BaseRepository(Generic[ModelType]):
         self,
         db: AsyncSession,
         ids: list[Any],
+        options: list[Any] | None = None,
         allow_deleted: bool = False,
     ) -> list[ModelType]:
         if not ids:
             return []
         pk_column = self.model.__mapper__.primary_key[0]
         stmt = select(self.model).filter(pk_column.in_(ids))
+
+        if options:
+            stmt = stmt.options(*options)
 
         if not allow_deleted:
             if hasattr(self.model, "is_deleted"):
@@ -55,7 +59,7 @@ class BaseRepository(Generic[ModelType]):
                 stmt = stmt.filter(self.model.deleted_at.is_(None))
 
         result = await db.execute(stmt)
-        return list(result.scalars().all())
+        return list(result.scalars().unique().all())
 
     async def get_list(
         self,
@@ -144,7 +148,7 @@ class BaseRepository(Generic[ModelType]):
         return items, total, offset, limit
 
     # Tất cả các hàm mutate đều không commit trước, chỉ flush để lấy ID (db.flush())
-    # Commit sẽ được thực hiện ở tầng service
+    # Commit sẽ được thực hiện ở tầng endpoint
 
     async def create(self, db: AsyncSession, dt: dict[str, Any]) -> ModelType:
         db_obj = self.model(**dt)
@@ -194,3 +198,71 @@ class BaseRepository(Generic[ModelType]):
 
             await db.flush()
         return db_obj
+
+    async def create_bulk(
+        self, db: AsyncSession, dts: list[dict[str, Any] | Any]
+    ) -> list[ModelType]:
+        if not dts:
+            return []
+
+        db_objs: list[ModelType] = []
+        for item in dts:
+            data = item if isinstance(item, dict) else item.model_dump()
+            db_objs.append(self.model(**data))
+
+        db.add_all(db_objs)
+        await db.flush()
+        return db_objs
+
+    async def delete_bulk(
+        self, db: AsyncSession, db_objs: list[ModelType]
+    ) -> list[ModelType]:
+        if not db_objs:
+            return []
+
+        has_soft_delete = False
+        is_deleted_attr = hasattr(self.model, "is_deleted")
+        deleted_at_attr = hasattr(self.model, "deleted_at")
+
+        for obj in db_objs:
+            if is_deleted_attr:
+                setattr(obj, "is_deleted", True)
+                has_soft_delete = True
+            if deleted_at_attr:
+                setattr(obj, "deleted_at", datetime.now(timezone.utc))
+                has_soft_delete = True
+
+            if not has_soft_delete:
+                await db.delete(obj)
+            else:
+                db.add(obj)
+
+        await db.flush()
+        return db_objs
+
+    async def delete_bulk_by_ids(
+        self, db: AsyncSession, ids: list[Any]
+    ) -> int:
+        if not ids:
+            return 0
+
+        pk_column = self.model.__mapper__.primary_key[0]
+
+        if hasattr(self.model, "is_deleted"):
+            stmt = (
+                update(self.model)
+                .where(pk_column.in_(ids), self.model.is_deleted == False)
+                .values(is_deleted=True)
+            )
+        elif hasattr(self.model, "deleted_at"):
+            stmt = (
+                update(self.model)
+                .where(pk_column.in_(ids), self.model.deleted_at.is_(None))
+                .values(deleted_at=datetime.now(timezone.utc))
+            )
+        else:
+            stmt = delete(self.model).where(pk_column.in_(ids))
+
+        result = await db.execute(stmt)
+        await db.flush()
+        return result.rowcount
