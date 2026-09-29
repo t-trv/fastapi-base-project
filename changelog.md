@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.1] - 2026-09-29
+
+### Added
+- **API Rate Limit:** Implement API Rate Limit sử dụng Redis để giới hạn số request trong 1 khoảng thời gian
+
 ## [1.1.1] - 2026-09-28
 
 ### Added
