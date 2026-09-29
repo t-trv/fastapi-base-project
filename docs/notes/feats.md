@@ -25,9 +25,14 @@
 - [x] **Tích hợp Redis Async (`redis-py`):**
   - [x] Cấu hình kết nối Redis Connection Pool qua `.env`
   - [x] Caching kết quả cho `GET /api/v1/posts` và `GET /api/v1/posts/{id}` (TTL + Invalidation)
+  - [x] Decorator `@cached` và `@invalidate_cache` dùng chung
   - [ ] Quản lý Blacklist JWT Token khi logout
-- [ ] **Rate Limiting (Chống Spam / Brute-force):**
-  - [ ] Giới hạn số request/phút theo IP hoặc User (dùng `slowapi` hoặc Redis Limiter)
+- [x] **Rate Limiting (Chống Spam / Brute-force):**
+  - [x] Decorator `@rate_limit(limit=5, window=60)` kiểm soát theo IP / Client (HTTP 429)
+- [ ] **Distributed Lock (Khóa phân tán):**
+  - [ ] Helper / Context Manager `redis_lock` chống Race Condition
+- [ ] **Realtime Pub/Sub & Leaderboard (ZSET):**
+  - [ ] Bảng xếp hạng / Bộ đếm view realtime với Redis Sorted Sets
 
 ---
 

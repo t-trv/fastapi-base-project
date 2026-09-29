@@ -54,3 +54,14 @@ class ConflictError(AppError):
         self, detail: str = "Resource already exists", error_code: str = "CONFLICT"
     ):
         super().__init__(detail=detail, status_code=409, error_code=error_code)
+
+
+class TooManyRequestsError(AppError):
+    """429 Too Many Requests - Rate limit exceeded"""
+
+    def __init__(
+        self,
+        detail: str = "Too many requests. Please slow down.",
+        error_code: str = "TOO_MANY_REQUESTS",
+    ):
+        super().__init__(detail=detail, status_code=429, error_code=error_code)

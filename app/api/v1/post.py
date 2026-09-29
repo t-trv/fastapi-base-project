@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.database import get_db
 from app.utils.cache import cached, invalidate_cache
+from app.utils.rate_limit import rate_limit
 from app.schemas.post import (
     PostCreate,
     BulkPostCreate,
@@ -54,8 +55,11 @@ async def delete_posts_bulk(
 
 
 @router.post("", response_model=PostResponse, status_code=201)
+@rate_limit(limit=3, window=10, prefix="posts:create")
 @invalidate_cache(patterns=["posts:list:*"])
-async def create_post(post_in: PostCreate, db: AsyncSession = Depends(get_db)):
+async def create_post(
+    post_in: PostCreate, request: Request, db: AsyncSession = Depends(get_db)
+):
     db_post = await post_service.create_post(db, post_in)
     await db.commit()
     return db_post
