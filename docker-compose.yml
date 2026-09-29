@@ -3,7 +3,7 @@ version: "3.8"
 services:
   db:
     image: postgres:15-alpine
-    container_name: app-db
+    container_name: app_db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
@@ -14,11 +14,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - app-network
+      - app_network
 
   pgadmin:
     image: dpage/pgadmin4
-    container_name: app-pgadmin
+    container_name: app_pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: adminpassword
@@ -28,11 +28,11 @@ services:
       - db
     restart: always
     networks:
-      - app-network
+      - app_network
 
   minio:
     image: quay.io/minio/minio:RELEASE.2024-01-18T22-51-28Z-cpuv1
-    container_name: app-minio
+    container_name: app_minio
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -44,21 +44,21 @@ services:
     command: server /data --console-address ":9001"
     restart: always
     networks:
-      - app-network
+      - app_network
 
   redis:
     image: redis:alpine
-    container_name: app-redis
+    container_name: app_redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     restart: always
     networks:
-      - app-network
+      - app_network
 
 networks:
-  app-network:
+  app_network:
     driver: bridge
 
 volumes:
