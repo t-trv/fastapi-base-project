@@ -6,6 +6,7 @@ from .base import (
     ForbiddenError,
     ConflictError,
     TooManyRequestsError,
+    BadGatewayError,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "ForbiddenError",
     "ConflictError",
     "TooManyRequestsError",
+    "BadGatewayError",
 ]

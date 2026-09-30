@@ -29,7 +29,7 @@ def register_exception_handlers(app: FastAPI):
             content={
                 "detail": {
                     "code": exc.error_code,
-                    "message": exc.detail,
+                    "message": exc.error_message,
                 }
             },
         )

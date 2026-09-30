@@ -6,6 +6,8 @@ class Base(DeclarativeBase):
     Base Class của SQLAlchemy 2.0.
     Chỉ tự động định nghĩa hàm __repr__ để in thông tin Model dễ đọc và bảo mật.
     """
+    # Return default value của các column 
+    __mapper_args__ = {"eager_defaults": True}
 
     def __repr__(self) -> str:
         class_name = self.__class__.__name__
