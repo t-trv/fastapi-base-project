@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.2] - 2026-10-05
+
+### Changed
+- **Soft Delete API:** Sửa lỗi trả về null khi Soft delete các model có Soft delete bật
+- **BaseRepository:** Bổ sung các hàm dùng chung `delete_bulk` và `delete_bulk_by_ids` (tự động nhận diện Soft/Hard Delete).
+
 ## [1.2.1] - 2026-09-29
 
 ### Added

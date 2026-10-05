@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config.database import get_db
-from app.schemas.user import UserCreate, UserUpdate, UserResponse
-from app.schemas.base import DataListResponse, PaginationMeta, CommonQueryParams
+from app.schemas.base import CommonQueryParams, DataListResponse, PaginationMeta
+from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services import user as user_service
 
 router = APIRouter()
@@ -13,13 +14,11 @@ async def list_users(
     params: CommonQueryParams = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    queries = params.build_queries()
-    items, total, _, _ = await user_service.get_users_list(db, **queries)
-    meta = PaginationMeta(
-        total=total,
-        offset=queries.get("offset", 0),
-        limit=queries.get("limit", 10),
+    items, total, _, _ = await user_service.get_users_list(
+        db, search=params.search, offset=params.offset or 0, limit=params.limit or 10,
+        sort_by=params.sort_by, sort_order=params.sort_order,
     )
+    meta = PaginationMeta(total=total, offset=params.offset or 0, limit=params.limit or 10)
     return DataListResponse(items=items, meta=meta)
 
 
@@ -36,9 +35,7 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{user_id}", response_model=UserResponse)
-async def update_user(
-    user_id: int, user_in: UserUpdate, db: AsyncSession = Depends(get_db)
-):
+async def update_user(user_id: int, user_in: UserUpdate, db: AsyncSession = Depends(get_db)):
     db_user = await user_service.update_user(db, user_id, user_in)
     await db.commit()
     return db_user

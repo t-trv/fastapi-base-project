@@ -40,5 +40,8 @@ class PostResponse(PostBase):
     updated_at: datetime
     owner: Optional[UserResponseForPost] = Field(None, validation_alias="user")
 
+class TrashedPostResponse(PostResponse):
+    deleted_at: datetime
+
 class PostQueryParams(CommonQueryParams):
-    user_id: Optional[int] = Field(None, gt=0)
+    username: Optional[str] = Field(None)

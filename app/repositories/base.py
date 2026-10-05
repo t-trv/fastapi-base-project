@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
-from typing import Generic, TypeVar, Type, Optional, Any
+from typing import Any, Generic, TypeVar
 
-from sqlalchemy import select, func, or_, cast, String, delete, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Base
@@ -10,259 +10,183 @@ ModelType = TypeVar("ModelType", bound=Base)
 
 
 class BaseRepository(Generic[ModelType]):
-    def __init__(self, model: Type[ModelType]):
+    """Template gọn cho mọi model. Chỉ giữ 6 thao tác lặp lại ở 100% repo.
+
+    Search / filter riêng của từng domain -> viết tường minh ở repo con,
+    không generic hoá bằng `filters: dict[str, Any]`.
+    """
+
+    def __init__(self, model: type[ModelType]):
         self.model = model
 
-    # Hàm query chỉ lấy dữ liệu, không commit
+    # -- helpers -------------------------------------------------------------
+    def _soft_delete_filter(self, stmt):
+        if hasattr(self.model, "is_deleted"):
+            return stmt.where(self.model.is_deleted == False)  # noqa: E712
+        if hasattr(self.model, "deleted_at"):
+            return stmt.where(self.model.deleted_at.is_(None))
+        return stmt
 
-    async def get(
+    def _is_soft_deleted(self, obj: ModelType) -> bool:
+        if getattr(obj, "is_deleted", False) is True:
+            return True
+        if getattr(obj, "deleted_at", None) is not None:
+            return True
+        return False
+
+    def _apply_sort(self, stmt, sort_by: str | None, sort_order: str | None):
+        col = getattr(self.model, sort_by, None) if sort_by else None
+        if col is not None:
+            return stmt.order_by(col if sort_order == "asc" else col.desc())
+        # fallback
+        if hasattr(self.model, "created_at"):
+            return stmt.order_by(self.model.created_at.desc())
+        pk = self.model.__mapper__.primary_key[0]
+        return stmt.order_by(pk.desc())
+
+    # -- read ----------------------------------------------------------------
+    async def get_by_id(
         self,
         db: AsyncSession,
         id: Any,
+        *,
         options: list[Any] | None = None,
         allow_deleted: bool = False,
-    ) -> Optional[ModelType]:
+    ) -> ModelType | None:
         if options:
-            pk_column = self.model.__mapper__.primary_key[0]
-            stmt = select(self.model).filter(pk_column == id).options(*options)
-            result = await db.execute(stmt)
-            obj = result.scalars().first()
+            pk = self.model.__mapper__.primary_key[0]
+            stmt = select(self.model).where(pk == id).options(*options)
+            obj = (await db.execute(stmt)).scalars().first()
         else:
             obj = await db.get(self.model, id)
-
-        if obj and not allow_deleted:
-            if getattr(obj, "is_deleted", False) is True:
-                return None
-            if getattr(obj, "deleted_at", None) is not None:
-                return None
+        if obj and not allow_deleted and self._is_soft_deleted(obj):
+            return None
         return obj
 
     async def get_by_ids(
         self,
         db: AsyncSession,
         ids: list[Any],
+        *,
         options: list[Any] | None = None,
         allow_deleted: bool = False,
     ) -> list[ModelType]:
         if not ids:
             return []
-        pk_column = self.model.__mapper__.primary_key[0]
-        stmt = select(self.model).filter(pk_column.in_(ids))
-
+        pk = self.model.__mapper__.primary_key[0]
+        stmt = select(self.model).where(pk.in_(ids))
+        if not allow_deleted:
+            stmt = self._soft_delete_filter(stmt)
         if options:
             stmt = stmt.options(*options)
-
-        if not allow_deleted:
-            if hasattr(self.model, "is_deleted"):
-                stmt = stmt.filter(self.model.is_deleted == False)
-            elif hasattr(self.model, "deleted_at"):
-                stmt = stmt.filter(self.model.deleted_at.is_(None))
-
-        result = await db.execute(stmt)
-        return list(result.scalars().unique().all())
+        return list((await db.execute(stmt)).scalars().unique().all())
 
     async def get_list(
         self,
         db: AsyncSession,
         *,
-        search: str | None = None,  # Chuỗi tìm kiếm
-        search_columns: list[str] | None = None,  # Các cột được phép tìm kiếm
-        filters: (
-            dict[str, Any] | None
-        ) = None,  # Lọc dưới dạng { "column": ["value1", "value2"] } hoặc đơn trị
-        filters_raw: (
-            list[Any] | None
-        ) = None,  # Lọc dưới dạng raw, bạn tự viết điều kiện
-        sort_by: str | None = "created_at",  # Cột được sắp xếp
-        sort_order: str | None = "desc",  # Thứ tự sắp xếp
-        offset: int = 0,  # Vị trí bắt đầu
-        limit: int = 10,  # Số lượng bản ghi
-        options: list[Any] | None = None,  # Truyền vào các options (ví dụ: joinedload)
-        allow_deleted: bool = False,  # Cho phép lấy cả bản ghi đã xóa soft-delete
+        offset: int = 0,
+        limit: int = 10,
+        sort_by: str | None = "created_at",
+        sort_order: str | None = "desc",
+        allow_deleted: bool = False,
+        options: list[Any] | None = None,
     ) -> tuple[list[ModelType], int, int, int]:
         stmt = select(self.model)
-
-        # 0. Xử lý options
+        if not allow_deleted:
+            stmt = self._soft_delete_filter(stmt)
         if options:
             stmt = stmt.options(*options)
+        stmt = self._apply_sort(stmt, sort_by, sort_order)
 
-        # 1. Xử lý Soft Delete (SỬA LỖI logic so sánh của Python)
-        if not allow_deleted:
-            if hasattr(self.model, "is_deleted"):
-                stmt = stmt.filter(self.model.is_deleted == False)
-            elif hasattr(self.model, "deleted_at"):
-                stmt = stmt.filter(self.model.deleted_at.is_(None))
-
-        # 2. Xử lý search str trên các cột được chỉ định search_columns
-        if search and search_columns:
-            search_conditions = []
-            for column_name in search_columns:
-                column = getattr(self.model, column_name, None)
-                if column is not None:
-                    # Ép kiểu column sang String trước khi dùng ilike
-                    search_conditions.append(cast(column, String).ilike(f"%{search}%"))
-            if search_conditions:
-                stmt = stmt.filter(or_(*search_conditions))
-
-        # 3. Xử lý filters
-        if filters:
-            for key, value in filters.items():
-                column = getattr(self.model, key, None)
-                if column is not None:
-                    # Nếu value là list thì dùng in_, ngược lại thì dùng ==
-                    if isinstance(value, list):
-                        stmt = stmt.filter(column.in_(value))
-                    else:
-                        stmt = stmt.filter(column == value)
-
-        # 4. Xử lý filters_raw
-        if filters_raw:
-            for f in filters_raw:
-                stmt = stmt.filter(f)
-
-        # 5. Xử lý sort_by và sort_order
-        if sort_by and hasattr(self.model, sort_by):
-            column = getattr(self.model, sort_by)
-            if sort_order == "asc":
-                stmt = stmt.order_by(column)
-            else:
-                stmt = stmt.order_by(column.desc())
-        else:
-            # Sort mặc định nếu sort_by không hợp lệ
-            if hasattr(self.model, "created_at"):
-                stmt = stmt.order_by(self.model.created_at.desc())
-            else:
-                pk_column = self.model.__mapper__.primary_key[0]
-                stmt = stmt.order_by(pk_column.desc())
-
-        # 6. Đếm tổng số bản ghi bất đồng bộ (Count)
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        count_result = await db.execute(count_stmt)
-        total = count_result.scalar_one()
-
-        # 7. Xử lý offset & limit
-        stmt = stmt.offset(offset).limit(limit)
-        items_result = await db.execute(stmt)
-        items = list(items_result.scalars().unique().all())
-
+        total = await db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        items = list((await db.execute(stmt.offset(offset).limit(limit))).scalars().unique().all())
         return items, total, offset, limit
 
-    # Tất cả các hàm mutate đều không commit trước, chỉ flush để lấy ID (db.flush())
-    # Commit sẽ được thực hiện ở tầng endpoint
+    async def get_trashed_list(
+        self,
+        db: AsyncSession,
+        *,
+        offset: int = 0,
+        limit: int = 10,
+        sort_order: str | None = "desc",
+        options: list[Any] | None = None,
+    ) -> tuple[list[ModelType], int, int, int]:
+        if not hasattr(self.model, "deleted_at") and not hasattr(self.model, "is_deleted"):
+            return [], 0, offset, limit
+        if hasattr(self.model, "deleted_at"):
+            stmt = select(self.model).where(self.model.deleted_at.is_not(None)).order_by(  # type: ignore[attr-defined]
+                self.model.deleted_at.desc() if sort_order != "asc" else self.model.deleted_at.asc()  # type: ignore[attr-defined]
+            )
+        else:
+            stmt = select(self.model).where(self.model.is_deleted == True)  # type: ignore[attr-defined]  # noqa: E712
+            stmt = self._apply_sort(stmt, "created_at", sort_order)
+        if options:
+            stmt = stmt.options(*options)
+        total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one() or 0
+        items = list((await db.execute(stmt.offset(offset).limit(limit))).scalars().unique().all())
+        return items, total, offset, limit
 
-    async def create(self, db: AsyncSession, dt: dict[str, Any]) -> ModelType:
-        db_obj = self.model(**dt)
-        db.add(db_obj)
+    # -- write (flush only, commit ở tầng api) -------------------------------
+    async def create(self, db: AsyncSession, data: dict[str, Any]) -> ModelType:
+        obj = self.model(**data)
+        db.add(obj)
         await db.flush()
-        return db_obj
+        return obj
 
-    async def update(
-        self, db: AsyncSession, db_obj: ModelType, dt: dict[str, Any]
-    ) -> ModelType:
-        # Lấy tên khóa chính thực tế của model để thêm vào protected_fields
+    async def create_many(self, db: AsyncSession, items: list[dict[str, Any]]) -> list[ModelType]:
+        if not items:
+            return []
+        objs = [self.model(**d) for d in items]
+        db.add_all(objs)
+        await db.flush()
+        return objs
+
+    async def update(self, db: AsyncSession, obj: ModelType, data: dict[str, Any]) -> ModelType:
         pk_name = self.model.__mapper__.primary_key[0].name
-        protected_fields = [pk_name, "id", "created_at", "updated_at"]
+        protected = {pk_name, "id", "created_at", "updated_at"}
+        if not isinstance(data, dict):
+            data = data.model_dump(exclude_unset=True)
+        for k, v in data.items():
+            if k not in protected and hasattr(obj, k):
+                setattr(obj, k, v)
+        db.add(obj)
+        await db.flush()
+        return obj
 
-        # 1. Kiểm tra dt là dict hay Pydantic model
-        if isinstance(dt, dict):
-            data = dt
+    async def delete(self, db: AsyncSession, obj: ModelType) -> ModelType:
+        has_soft = False
+        if hasattr(obj, "is_deleted"):
+            setattr(obj, "is_deleted", True)
+            has_soft = True
+        if hasattr(obj, "deleted_at"):
+            setattr(obj, "deleted_at", datetime.now(timezone.utc))
+            has_soft = True
+        if not has_soft:
+            await db.delete(obj)
         else:
-            data = dt.model_dump(exclude_unset=True)
-
-        # 2. Update các field được phép update
-        for field in data:
-            if field not in protected_fields and hasattr(db_obj, field):
-                setattr(db_obj, field, data[field])
-
-        db.add(db_obj)
+            db.add(obj)
         await db.flush()
-        return db_obj
+        return obj
 
-    async def delete(self, db: AsyncSession, db_obj: ModelType) -> ModelType:
-        if db_obj:
-            has_soft_delete = False
-            # 1. Cập nhật field is_deleted
-            if hasattr(db_obj, "is_deleted"):
-                setattr(db_obj, "is_deleted", True)
-                has_soft_delete = True
-            # 2. Cập nhật field deleted_at (dùng UTC)
-            if hasattr(db_obj, "deleted_at"):
-                setattr(db_obj, "deleted_at", datetime.now(timezone.utc))
-                has_soft_delete = True
-
-            # 3. Nếu không có field nào thì mới xóa vĩnh viễn
-            if not has_soft_delete:
-                await db.delete(db_obj)
-            else:
-                db.add(db_obj)
-
-            await db.flush()
-        return db_obj
-
-    async def create_bulk(
-        self, db: AsyncSession, dts: list[dict[str, Any] | Any]
-    ) -> list[ModelType]:
-        if not dts:
+    async def delete_many(self, db: AsyncSession, objs: list[ModelType]) -> list[ModelType]:
+        if not objs:
             return []
+        for o in objs:
+            await self.delete(db, o)
+        return objs
 
-        db_objs: list[ModelType] = []
-        for item in dts:
-            data = item if isinstance(item, dict) else item.model_dump()
-            db_objs.append(self.model(**data))
-
-        db.add_all(db_objs)
+    async def restore(self, db: AsyncSession, obj: ModelType) -> ModelType:
+        if hasattr(obj, "is_deleted"):
+            setattr(obj, "is_deleted", False)
+        if hasattr(obj, "deleted_at"):
+            setattr(obj, "deleted_at", None)
+        if not hasattr(obj, "is_deleted") and not hasattr(obj, "deleted_at"):
+            return obj
+        db.add(obj)
         await db.flush()
-        return db_objs
+        return obj
 
-    async def delete_bulk(
-        self, db: AsyncSession, db_objs: list[ModelType]
-    ) -> list[ModelType]:
-        if not db_objs:
-            return []
-
-        has_soft_delete = False
-        is_deleted_attr = hasattr(self.model, "is_deleted")
-        deleted_at_attr = hasattr(self.model, "deleted_at")
-
-        for obj in db_objs:
-            if is_deleted_attr:
-                setattr(obj, "is_deleted", True)
-                has_soft_delete = True
-            if deleted_at_attr:
-                setattr(obj, "deleted_at", datetime.now(timezone.utc))
-                has_soft_delete = True
-
-            if not has_soft_delete:
-                await db.delete(obj)
-            else:
-                db.add(obj)
-
+    async def hard_delete(self, db: AsyncSession, obj: ModelType) -> None:
+        await db.delete(obj)
         await db.flush()
-        return db_objs
-
-    async def delete_bulk_by_ids(
-        self, db: AsyncSession, ids: list[Any]
-    ) -> int:
-        if not ids:
-            return 0
-
-        pk_column = self.model.__mapper__.primary_key[0]
-
-        if hasattr(self.model, "is_deleted"):
-            stmt = (
-                update(self.model)
-                .where(pk_column.in_(ids), self.model.is_deleted == False)
-                .values(is_deleted=True)
-            )
-        elif hasattr(self.model, "deleted_at"):
-            stmt = (
-                update(self.model)
-                .where(pk_column.in_(ids), self.model.deleted_at.is_(None))
-                .values(deleted_at=datetime.now(timezone.utc))
-            )
-        else:
-            stmt = delete(self.model).where(pk_column.in_(ids))
-
-        result = await db.execute(stmt)
-        await db.flush()
-        return result.rowcount
