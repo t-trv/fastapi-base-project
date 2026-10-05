@@ -39,27 +39,48 @@ async def get_posts_list(
 
 
 async def create_post(db: AsyncSession, post_in: PostCreate) -> Post:
+    # Kiem tra user co ton tai hay khong
     user = await user_repository.get_by_id(db, post_in.user_id)
     if not user:
         raise NotFoundError(detail="User not found")
-    post_data = post_in.model_dump()
+
+    # Create post
+    post_data = post_in.model_dump(exclude_unset=True)
     post = await post_repository.create(db, post_data)
-    return await get_post_by_id(db, post.id)
+
+    # Set user relationship
+    post.user = user
+
+    # Return
+    return post
 
 
 async def create_posts_bulk(db: AsyncSession, posts_in: list[PostCreate]) -> list[Post]:
+    # Check empty
     if not posts_in:
         return []
+
+    # Lấy danh sách id người dùng theo data in
     user_ids = list({p.user_id for p in posts_in})
+
+    # Lấy danh sách người dùng
     users = await user_repository.get_by_ids(db, user_ids)
     user_map = {u.id: u for u in users}
+
+    # Kiểm tra danh sách người dùng có tồn tại hay không
     missing = set(user_ids) - set(user_map.keys())
     if missing:
         raise NotFoundError(detail=f"User IDs not found: {list(missing)}")
+
+    # Create posts
     posts_data = [p.model_dump(exclude_unset=True) for p in posts_in]
     created = await post_repository.create_many(db, posts_data)
+
+    # Set user relationship
     for post in created:
         post.user = user_map.get(post.user_id)
+
+    # Return
     return created
 
 
