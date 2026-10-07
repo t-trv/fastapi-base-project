@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.0] - 2026-10-07
+
+### Added
+- **Automated Testing Suite:** Tích hợp bộ kiểm thử tự động với `pytest` + `pytest-asyncio` + `httpx.AsyncClient`.
+- **In-memory SQLite Test Engine:** Cấu hình `aiosqlite` + `StaticPool` cho phép chạy test DB độc lập, tốc độ cao mà không phụ thuộc PostgreSQL thật.
+- **Service Isolation & Mocking:** Tự động mock Redis và APScheduler trong lifespan khi chạy test.
+- **Test Scripts:** Bổ sung script chạy test tiện lợi cho đa nền tảng: `run-test.sh` (Linux/macOS) và `run-test.ps1` (Windows/PowerShell).
+- **Test Coverage Mẫu:** Viết bộ test cases hoàn chỉnh cho Root API, CRUD User, CRUD Post, Soft-delete & Restore, Bulk APIs và tái hiện các case lỗi validation/business.
+
 ## [1.2.2] - 2026-10-05
 
 ### Changed

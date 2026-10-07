@@ -64,10 +64,10 @@
 ---
 
 ## 🧪 6. Testing & DevOps (CI/CD)
-- [ ] **Automated Testing:**
-  - [ ] Cấu hình `pytest` + `pytest-asyncio` + `httpx.AsyncClient`
-  - [ ] Viết bộ test fixture cho Database in-memory / test SQLite
-  - [ ] Test cases mẫu cho CRUD, Auth, Bulk APIs
+- [x] **Automated Testing:**
+  - [x] Cấu hình `pytest` + `pytest-asyncio` + `httpx.AsyncClient`
+  - [x] Viết bộ test fixture cho Database in-memory / test SQLite
+  - [x] Test cases mẫu cho CRUD, Auth, Bulk APIs
 - [ ] **Docker & Deployment:**
   - [ ] `Dockerfile` chuẩn tối ưu (Multi-stage build)
   - [ ] `docker-compose.yml` (App + PostgreSQL + Redis + Adminer)

@@ -47,8 +47,6 @@ async def create_post(db: AsyncSession, post_in: PostCreate) -> Post:
     # Create post
     post_data = post_in.model_dump(exclude_unset=True)
     post = await post_repository.create(db, post_data)
-
-    # Set user relationship
     post.user = user
 
     # Return
