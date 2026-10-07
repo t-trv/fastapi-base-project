@@ -1,39 +1,58 @@
-# Sử dụng base image Python chính thức bản slim để giảm dung lượng
-FROM python:3.11-slim
+# ==========================================
+# 1. Builder Stage: Biên dịch & build wheels
+# ==========================================
+FROM python:3.11-slim AS builder
 
-# Thiết lập các biến môi trường
-# PYTHONUNBUFFERED: Giúp log hiển thị ngay lập tức mà không bị nghẽn trong buffer
-# PYTHONDONTWRITEBYTECODE: Không tạo các file .pyc để giữ image sạch sẽ
+WORKDIR /app
+
+# Cài đặt công cụ biên dịch tạm thời cho các thư viện C
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+# Build wheels riêng vào thư mục /app/wheels để tái sử dụng
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+
+# ==========================================
+# 2. Final Stage: Runtime siêu nhẹ & bảo mật
+# ==========================================
+FROM python:3.11-slim AS runner
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     APP_HOME=/app
 
-# Thiết lập thư mục làm việc
 WORKDIR $APP_HOME
 
-# Cài đặt các thư viện hệ thống cần thiết (cho PostgreSQL và các thư viện xử lý ảnh nếu cần)
+# Chỉ cài runtime thư viện libpq cần cho PostgreSQL (bỏ toàn bộ build-essential)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && apt-get clean \
+    libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Sao chép file requirements trước để tận dụng Docker cache
-COPY requirements.txt .
-
-# Cài đặt các thư viện Python
+# Cài đặt các package đã build sẵn từ builder stage
+COPY --from=builder /app/wheels /wheels
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir /wheels/* && \
+    rm -rf /wheels
 
-# Sao chép toàn bộ mã nguồn vào container
+# Tạo user không có quyền root (Non-root user) để tăng cường bảo mật
+RUN addgroup --system appgroup && adduser --system --group appuser
+
+# Copy mã nguồn dự án
 COPY . .
 
-# Cấp quyền thực thi cho các script (nếu có script chạy trên Linux thay thế win_run.ps1)
-RUN chmod +x /app/app/main.py
+# Phân quyền cho appuser và entrypoint
+RUN chmod +x /app/entrypoint.sh && \
+    chown -R appuser:appgroup $APP_HOME
 
-# Mở port 5100 (theo cấu hình của bạn trong mô tả)
+USER appuser
+
 EXPOSE 5100
 
-# Lệnh khởi chạy ứng dụng
-# Lưu ý: Sử dụng host 0.0.0.0 để có thể truy cập từ ngoài container
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5100"]
+ENTRYPOINT ["/app/entrypoint.sh"]

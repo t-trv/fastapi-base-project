@@ -1,133 +1,110 @@
-# 🚀 FastAPI Advanced Base Project
+# FastAPI Base Project
 
-Dự án Boilerplate Backend hiệu năng cao được xây dựng trên nền tảng **FastAPI**, tuân thủ nghiêm ngặt kiến trúc phân lớp (**Layered Architecture**: Controller/API -> Service -> Repository -> Model) và tích hợp sẵn các giải pháp chuẩn hóa cho dự án production thực tế.
-
----
-
-## 🛠️ Công nghệ sử dụng
-
-- **[FastAPI](https://fastapi.tiangolo.com/)**: Framework web hiện đại, hiệu năng cao, dựa trên Starlette và Pydantic v2.
-- **[SQLAlchemy 2.0 (Async)](https://www.sqlalchemy.org/)**: ORM mạnh mẽ xử lý truy vấn cơ sở dữ liệu bất đồng bộ thông qua `asyncpg`.
-- **[Alembic](https://alembic.sqlalchemy.org/)**: Công cụ quản lý và migration cấu trúc Database tự động.
-- **[Pydantic v2](https://docs.pydantic.dev/latest/)**: Xác thực và chuẩn hóa dữ liệu đầu vào/đầu ra với tốc độ xử lý nhanh.
-- **[Bcrypt](https://pypi.org/project/bcrypt/)**: Mã hóa và bảo mật mật khẩu người dùng.
-- **PostgreSQL**: Hệ quản trị cơ sở dữ liệu quan hệ mạnh mẽ chạy trên môi trường Docker.
+Backend boilerplate chuẩn hóa theo kiến trúc phân lớp (Layered Architecture): `Endpoint -> Service -> Repository -> Model`.
 
 ---
 
-## 🏗️ Kiến trúc thư mục (Project Structure)
+## 1. Yêu cầu hệ thống
 
-Dự án được tổ chức phẳng hóa ở tầng Controller và phân lớp rõ ràng để dễ bảo trì và mở rộng:
+- Python 3.11+
+- Docker & Docker Compose
 
-```text
-api/
-├── alembic/                # Quản lý migration Database
-├── app/
-│   ├── api/
-│   │   └── v1/             # Flattened Controller (Ví dụ: user.py, telegram.py)
-│   ├── config/             # Cấu hình Database, settings
-│   ├── core/               # Lõi hệ thống (Logging, Exceptions registry)
-│   ├── dependencies/       # Dependency Injection (Database, Auth...)
-│   ├── exceptions/         # Định nghĩa các lớp lỗi nghiệp vụ tùy chỉnh (Business Errors)
-│   ├── models/             # Định nghĩa cấu trúc bảng Database (SQLAlchemy Models)
-│   ├── repositories/       # Tương tác cơ sở dữ liệu (CRUD base logic)
-│   ├── schemas/            # Pydantic Schemas (Data validation & serialization)
-│   ├── services/           # Tầng nghiệp vụ (Functional Business Logic)
-│   ├── utils/              # Các công cụ hỗ trợ (JWT, Security, TelegramClient...)
-│   └── main.py             # File khởi chạy ứng dụng chính
-├── logs/                   # Thư mục lưu trữ log xoay vòng (app.log)
-├── requirements.txt        # Danh sách thư viện phụ thuộc
-├── run.sh                  # Script khởi chạy nhanh trên Linux/MacOS
-└── docker-compose.yml      # Docker Compose khởi chạy DB, pgAdmin, MinIO
+---
+
+## 2. Khởi chạy nhanh với Docker (Khuyên dùng)
+
+### Bước 1: Chuẩn bị biến môi trường
+```bash
+cp .env.example .env
+```
+*(Chỉnh sửa thông số kết nối nếu cần. Mặc định đã cấu hình sẵn mạng nội bộ Docker).*
+
+### Bước 2: Khởi chạy
+```bash
+docker compose up -d --build
 ```
 
+- API Docs (Swagger): `http://localhost:5100/docs`
+- pgAdmin: `http://localhost:8080` (Tài khoản: `admin@example.com` / `adminpassword`)
+- MinIO Console: `http://localhost:9001` (`minioadmin` / `minioadminpassword`)
+
 ---
 
-## 🔑 Các tính năng nổi bật đã tích hợp
+## 3. Khởi chạy trên máy Local (Không dùng Docker App)
 
-### 1. Chuẩn hóa Exception & Dữ liệu Lỗi
+### Bước 1: Khởi tạo môi trường ảo & cài đặt thư viện
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-test.txt
+```
 
-- Tất cả các lỗi trong hệ thống (lỗi nghiệp vụ, lỗi crash 500, lỗi validate Pydantic 422, lỗi route không tồn tại) đều được bắt toàn cục và chuẩn hóa cấu trúc JSON phản hồi bằng Tiếng Anh thống nhất:
-  ```json
-  {
-    "detail": {
-      "code": "ERROR_CODE_STRING",
-      "message": "Friendly error message description",
-      "errors": [] // Danh sách lỗi chi tiết nếu là lỗi Validate nhiều trường
-    }
-  }
+### Bước 2: Bật Database & Redis
+```bash
+# Chỉ chạy DB, Redis, MinIO
+docker compose up -d db redis minio
+```
+
+### Bước 3: Cấu hình môi trường
+Tạo file `.env.local` để ghi đè kết nối máy local:
+```env
+APP_PORT=5100
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgrespassword
+DB_NAME=app_db
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+```
+
+### Bước 4: Chạy Migration & Khởi động Server
+- **Linux / macOS:**
+  ```bash
+  chmod +x run.sh && ./run.sh
+  ```
+- **Windows (PowerShell):**
+  ```powershell
+  .\run.ps1
   ```
 
-### 2. Hệ thống Log an toàn & Tự động khôi phục
+---
 
-- Ghi log vết lỗi (Traceback) chi tiết ra file `logs/app.log`.
-- Tích hợp **Log Rotation**: Giới hạn tối đa **10MB** mỗi file và lưu trữ tối đa **5 file backup**.
-- Tự động phát hiện file log bị xóa thủ công trong lúc server chạy và tự động khởi tạo lại file log sạch ngay lập tức để tránh lỗi gián đoạn log.
+## 4. Chạy Automated Tests
 
-### 3. Tích hợp Telegram Bot Webhook
+Hệ thống test dùng SQLite in-memory, mock sẵn Redis và Scheduler:
 
-- **TelegramClient**: Tối ưu hiệu năng gửi tin nhắn và file bằng cách duy trì kết nối mạng (`requests.Session` Keep-Alive).
-- **Webhook Endpoint** (`POST /api/v1/telegram/webhook`): Tiếp nhận các lệnh chat của admin:
-  - `/getlog`: Tải và gửi trực tiếp file `logs/app.log` về Telegram của Admin bằng `BackgroundTasks` (không block request).
-  - `/getusers`: Truy vấn nhanh danh sách người dùng trong Database local, format đẹp bằng Markdown và gửi về Telegram.
-  - **Bảo mật Chat ID**: Chỉ cho phép Chat ID admin cấu hình trong `.env.local` thực thi lệnh. Nếu có Chat ID lạ cố tình gõ lệnh, hệ thống sẽ chặn và bắn cảnh báo bảo mật về Telegram của Admin.
+- **Linux / macOS:**
+  ```bash
+  ./run-test.sh
+  ```
+- **Windows (PowerShell):**
+  ```powershell
+  .\run-test.ps1
+  ```
+- **Pytest trực tiếp:**
+  ```bash
+  pytest -v
+  ```
 
 ---
 
-## 🚀 Hướng dẫn cài đặt dưới local
+## 5. Cấu trúc thư mục
 
-### 1. Khởi tạo môi trường ảo Python
-
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/MacOS
-# hoặc on Windows: .\venv\Scripts\activate
-```
-
-### 2. Cài đặt các thư viện
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Khởi động PostgreSQL & pgAdmin qua Docker
-
-```bash
-docker compose up -d
-```
-
-- _Cơ sở dữ liệu PostgreSQL sẽ chạy tại cổng `5435` ở máy local._
-
-### 4. Thiết lập biến môi trường
-
-Tạo file `.env.local` dựa trên file `.env.example` và cấu hình Token Bot Telegram cùng Chat ID của bạn:
-
-```env
-APP_PORT=5102
-DB_PORT=5435
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-
-# Telegram Configuration
-TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
-TELEGRAM_CHAT_ID=YOUR_TELEGRAM_CHAT_ID
-```
-
-### 5. Thực thi Database Migration
-
-```bash
-alembic upgrade head
-```
-
-### 6. Khởi chạy ứng dụng
-
-```bash
-./run.sh
-```
-
-- _Ứng dụng sẽ chạy tại địa chỉ: `http://localhost:5102`_
-- _Trang tài liệu Swagger UI: `http://localhost:5102/docs`_
-
-```
-
+```text
+├── app/
+│   ├── api/v1/         # Endpoints (Route, commit DB, validate response)
+│   ├── config/         # Settings, database session, redis client
+│   ├── core/           # Logging, exception handlers toàn cục
+│   ├── models/         # SQLAlchemy models (Base, User, Post)
+│   ├── repositories/   # Truy vấn DB thuần túy (CRUD, flush ID)
+│   ├── schemas/        # Pydantic v2 schemas
+│   ├── services/       # Module functions xử lý business logic
+│   └── utils/          # Cache, rate limit, helpers
+├── tests/              # Fixtures và test cases (pytest + httpx)
+├── docker-compose.yml  # Điều phối App, DB, Redis, MinIO, pgAdmin
+├── Dockerfile          # Multi-stage build tối ưu cho production
+└── entrypoint.sh       # Script tự động migrate DB và chạy Uvicorn
 ```

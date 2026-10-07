@@ -1,18 +1,61 @@
-version: "3.8"
+# ${DB_USER:-postgres}: Tức là nếu trong file .env không có biến DB_USER thì sẽ lấy giá trị mặc định là postgres
 
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app_fastapi
+    restart: always
+    # dòng này có tác dụng lấy tòan bộ KEY=VALUE trong file .env vào container 
+    env_file:
+      - .env
+    ports:
+      - "5100:5100"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_network
+
   db:
     image: postgres:15-alpine
     container_name: app_db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: app_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgrespassword}
+      POSTGRES_DB: ${DB_NAME:-app_db}
+    # Chỉ mở port nội bộ máy chủ nếu cần debug, không expose ra public IP
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-app_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: always
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+  redis:
+    image: redis:alpine
+    container_name: app_redis
+    command: redis-server --appendonly yes
+    # Chỉ mở port nội bộ máy chủ nếu cần debug
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
+    restart: always
     networks:
       - app_network
 
@@ -20,12 +63,13 @@ services:
     image: dpage/pgadmin4
     container_name: app_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: adminpassword
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-adminpassword}
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: always
     networks:
       - app_network
@@ -34,25 +78,14 @@ services:
     image: quay.io/minio/minio:RELEASE.2024-01-18T22-51-28Z-cpuv1
     container_name: app_minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadminpassword
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadminpassword}
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
-    restart: always
-    networks:
-      - app_network
-
-  redis:
-    image: redis:alpine
-    container_name: app_redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
     restart: always
     networks:
       - app_network

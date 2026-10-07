@@ -69,5 +69,5 @@
   - [x] Viết bộ test fixture cho Database in-memory / test SQLite
   - [x] Test cases mẫu cho CRUD, Auth, Bulk APIs
 - [ ] **Docker & Deployment:**
-  - [ ] `Dockerfile` chuẩn tối ưu (Multi-stage build)
+  - [x] `Dockerfile` chuẩn tối ưu (Multi-stage build)
   - [ ] `docker-compose.yml` (App + PostgreSQL + Redis + Adminer)
